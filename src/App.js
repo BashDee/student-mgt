@@ -1,24 +1,36 @@
-import logo from './logo.svg';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Login from './components/Login';
+import Dashboard from './components/Dashboard';
+import PrivateRoute from './components/PrivateRoute'; 
+import StudentRecord from './components/StudentRecord';
+
+
 import './App.css';
 
 function App() {
+  const [role, setRole] = useState(localStorage.getItem('role') || '');
+
+  const handleLogin = (userRole) => {
+    setRole(userRole);
+  };
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <div>
+        <Routes>
+          {/* Login Route */}
+          <Route path="/" element={<Login onLogin={handleLogin} />} />
+
+          {/* Dashboard Route protected by PrivateRoute */}
+          <Route path="/dashboard" element={
+            <PrivateRoute>
+              <StudentRecord role={role} />
+            </PrivateRoute>
+          } />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
