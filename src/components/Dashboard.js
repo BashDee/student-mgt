@@ -1,29 +1,58 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+
 import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client';
+
 import '../App.css';
 
+const socket = io('http://localhost:4000', {
+  transports: ['websocket', 'polling'],  // Enable WebSocket and fallback to polling
+});
 
 function Dashboard({ role }) {
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // Listen for studentAdded and gradeUpdated events
+    socket.on('studentAdded', (data) => {
+      setNotifications((prevNotifications) => [...prevNotifications, data.message]);
+    });
+
+    socket.on('gradeUpdated', (data) => {
+      setNotifications((prevNotifications) => [...prevNotifications, data.message]);
+    });
+
+    // Cleanup on component unmount
+    return () => {
+      socket.off('studentAdded');
+      socket.off('gradeUpdated');
+      socket.disconnect();  // Close the connection on component unmount
+    };
+  }, []);
+
   const handleLogout = () => {
-    // Clear the token and role from localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('role');
-
-    // Redirect to login
     navigate('/');
   };
-
   return (
     <div className="container">
       <div className="dashboard">
+      {notifications.map((notification, index) => (
+          <div key={index} className="notification">
+            {notification}
+          </div>
+        ))}
         <h2>Welcome to the Dashboard</h2>
+       
+        
         {role === 'admin' && (
           <div>
             <h3>Admin Dashboard (HOD or Adviser)</h3>
             <p>You have admin privileges. You can manage student records.</p>
           </div>
+
         )}
         {role === 'student' && (
           <div>

@@ -1,4 +1,7 @@
 const express = require('express');
+const http = require('http');
+const socketIO = require('socket.io');
+
 const bodyParser = require('body-parser');
 const { Gateway, Wallets } = require('fabric-network');
 
@@ -11,6 +14,9 @@ const cors = require('cors');
 
 // Constants
 const app = express();
+const server = http.createServer(app);
+const io = socketIO(server, { cors: { origin: "http://localhost:3000", methods: ["GET", "POST"] } });
+
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = 'admin'; // Secret for JWT signing
 
@@ -24,20 +30,52 @@ app.use(cors({
 app.use(express.json());
 
 
+// When a client connects
+io.on('connection', (socket) => {
+  console.log('A user connected: ', socket.id);
+
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    console.log('A user disconnected: ', socket.id);
+  });
+});
+
+// Emit an event when a student is added or grade updated
+function notifyUsers(event, data) {
+  console.log(`Sending notification: ${event} - ${data.message}`);
+  io.emit(event, data);  // Send notification to all connected users
+}
+
+// Example of student added notification
+app.post('/addStudent', async (req, res) => {
+  const { studentName, studentId } = req.body;
+  // Add the student logic here
+  
+  // Notify all users
+  notifyUsers('studentAdded', { message: `Student ${studentName} has been added.` });
+
+  res.status(200).send('Student added and notification sent');
+});
+
+// Example of grade updated notification
+app.post('/updateGrade', async (req, res) => {
+  const { studentId, newGrade } = req.body;
+  // Update grade logic here
+  
+  // Notify all users
+  notifyUsers('gradeUpdated', { message: `Grade updated for student ${studentId} is ${newGrade}` });
+
+  res.status(200).send('Grade updated and notification sent');
+});
+
+
 // Dummy data for simplicity
 let students = [
     { id: '123', name: 'John Doe', grades: { Math: 'A', Science: 'B' } },
     { id: '456', name: 'Jane Smith', grades: { Math: 'B+', History: 'A' } }
   ];
   
-  // Add new student (HOD functionality)
-  app.post('/students/add', (req, res) => {
-    const { id, name } = req.body;
-    const newStudent = { id, name, grades: {} };
-    students.push(newStudent);
-    res.status(201).json(newStudent);
-  });
-  
+
   // Update student grade (HOD functionality)
   app.post('/grades/update', (req, res) => {
     const { id, course, grade } = req.body;
@@ -55,7 +93,6 @@ let students = [
   });
 
   
-
 
 // Load connection profile
 const ccpPath = path.resolve(__dirname, 'fabric-network', 'connection.json');
@@ -81,24 +118,29 @@ async function getContract() {
     const network = await gateway.getNetwork('mychannel');
     return network.getContract('studentcc');
   }
+  
 
-  app.get('/', (req, res) => {
-    res.send('Blockchain Student Record System Backend');
+    app.get('/', (req, res) => {
+      res.send('Blockchain Student Record System Backend');
 
 });
 
-// Add student API
 app.post('/students/add', async (req, res) => {
-    try {
-      const { id, name } = req.body;
-      const contract = await getContract();
-      await contract.submitTransaction('AddStudent', id, name);
-      res.status(200).send(`Student ${name} added successfully`);
-    } catch (error) {
-      res.status(500).send(error.toString());
-    }
-  });
-  
+  try {
+    const { id, name } = req.body;
+    const contract = await getContract();
+    await contract.submitTransaction('AddStudent', id, name);
+    
+    // Emit notification after the student is added
+    notifyUsers('studentAdded', { message: `New student ${name} added via blockchain.` });
+    
+    res.status(200).send(`Student ${name} added successfully`);
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+
   // Update grade API
   app.post('/grades/update', async (req, res) => {
     try {
@@ -157,7 +199,9 @@ const users = [
 
 app.use('/students', verifyToken, studentRoutes);
 app.use('/grades', verifyToken, gradeRoutes);
-
+app.use(cors({
+  origin: 'http://localhost:3000'
+}));
   
 // Start the server
 app.listen(PORT, () => {
